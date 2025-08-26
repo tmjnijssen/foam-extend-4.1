@@ -85,7 +85,6 @@ Foam::IOdictionary::IOdictionary(const IOobject& io)
         }
     }
 
-
     if
     (
         (
