@@ -184,10 +184,13 @@ Foam::faSchemes::faSchemes(const objectRegistry& obr)
                 << endl;
         }
 
-        regIOobject::write();
+        // Do not force writing of faSchemes if they did not exist
+        // HJ, 26/Aug/2025
     }
-
-    read();
+    else
+    {
+        read();
+    }
 }
 
 
