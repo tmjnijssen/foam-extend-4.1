@@ -1,31 +1,31 @@
 /*---------------------------------------------------------------------------*\
   =========                 |
-  \\      /  F ield         | foam-extend: Open Source CFD
-   \\    /   O peration     | Version:     4.1
-    \\  /    A nd           | Web:         http://www.foam-extend.org
-     \\/     M anipulation  | For copyright notice see file Copyright
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Copyright (C) 2011-2022 OpenFOAM Foundation
+     \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
-    This file is part of foam-extend.
+    This file is part of OpenFOAM.
 
-    foam-extend is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by the
-    Free Software Foundation, either version 3 of the License, or (at your
-    option) any later version.
+    OpenFOAM is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-    foam-extend is distributed in the hope that it will be useful, but
-    WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    General Public License for more details.
+    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    for more details.
 
     You should have received a copy of the GNU General Public License
-    along with foam-extend.  If not, see <http://www.gnu.org/licenses/>.
+    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
     Foam::OSHA1stream
 
 Description
-    An output stream for calculating SHA1 digests.
+    A Foam::OSstream for calculating SHA-1 digests
 
 SourceFiles
     OSHA1stream.C
@@ -43,24 +43,19 @@ SourceFiles
 namespace Foam
 {
 
-class osha1stream;
-class OSHA1stream;
-
 /*---------------------------------------------------------------------------*\
                         Class sha1streambuf Declaration
 \*---------------------------------------------------------------------------*/
 
-//- A streambuf class for calculating SHA1 digests
 class sha1streambuf
 :
     public std::streambuf
 {
-    // Private data
+    // Private Data
 
-    //- This does all the work and has its own buffering
-    SHA1 sha1_;
+        //- The SHA-1 class which processes the strings
+        SHA1 sha1_;
 
-    friend class osha1stream;
 
 public:
 
@@ -70,15 +65,38 @@ public:
         sha1streambuf()
         {}
 
+
     // Member Functions
 
-    // Write
-
-        //- Process unbuffered
-        virtual std::streamsize xsputn(const char* str, std::streamsize n)
+        //- Return the SHA-1
+        SHA1& sha1()
         {
-            sha1_.append(str, n);
+            return sha1_;
+        }
+
+        //- Writes characters from the array pointed to by s
+        //  into the controlled output sequence, until either n characters
+        //  have been written or the end of the output sequence is reached
+        virtual std::streamsize xsputn(const char* s, std::streamsize n)
+        {
+            sha1_.append(s, n);
             return n;
+        }
+
+        //- Writes c to the current position of the put pointer (pptr),
+        //  and advances that pointer one position forward.
+        //  If c is EOF, no characters are written and the put pointer
+        //  (pptr) is not advanced.
+        //  Maybe used by xsputn (C++11).
+        virtual int overflow(int c = EOF)
+        {
+            if (c != EOF)
+            {
+                const char cc = c;
+                sha1_.append(&cc, 1);
+            }
+
+            return c;
         }
 };
 
@@ -87,15 +105,16 @@ public:
                          Class osha1stream Declaration
 \*---------------------------------------------------------------------------*/
 
-//- A basic output stream for calculating SHA1 digests
 class osha1stream
 :
     virtual public std::ios,
     public std::ostream
 {
-    // Private data
+    // Private Data
 
-    sha1streambuf sbuf_;
+        // SHA-1 stream buffer
+        sha1streambuf sbuf_;
+
 
 public:
 
@@ -107,22 +126,20 @@ public:
             std::ostream(&sbuf_)
         {}
 
+
     // Member Functions
 
-    // Access
+        //- Return the SHA-1
+        SHA1& sha1()
+        {
+            return sbuf_.sha1();
+        }
 
-        //- This hides both signatures of std::basic_ios::rdbuf()
+        //- Return the stream buffer
         sha1streambuf* rdbuf()
         {
             return &sbuf_;
         }
-
-        //- Full access to the sha1
-        SHA1& sha1()
-        {
-            return sbuf_.sha1_;
-        }
-
 };
 
 
@@ -130,19 +147,10 @@ public:
                          Class OSHA1stream Declaration
 \*---------------------------------------------------------------------------*/
 
-//- The output stream for calculating SHA1 digests
 class OSHA1stream
 :
     public OSstream
 {
-
-    // Private Member Functions
-
-        //- Disallow default bitwise copy construct
-        OSHA1stream(const OSHA1stream&);
-
-        //- Disallow default bitwise assignment
-        void operator=(const OSHA1stream&);
 
 public:
 
@@ -151,8 +159,8 @@ public:
         //- Construct and set stream status
         OSHA1stream
         (
-            streamFormat format = ASCII,
-            versionNumber version = currentVersion
+            streamFormat format=ASCII,
+            versionNumber version=currentVersion
         )
         :
             OSstream
@@ -164,32 +172,30 @@ public:
             )
         {}
 
+        //- Disallow default bitwise copy construction
+        OSHA1stream(const OSHA1stream&) = delete;
 
-    // Destructor
 
-        ~OSHA1stream()
+    //- Destructor
+    ~OSHA1stream()
+    {
+        delete &dynamic_cast<osha1stream&>(stdStream());
+    }
+
+
+    // Member Functions
+
+        //- Return the SHA-1
+        SHA1& sha1()
         {
-            delete &dynamic_cast<osha1stream&>(stream());
+            return dynamic_cast<osha1stream&>(stdStream()).sha1();
         }
 
-
-    // Member functions
-
-    // Access
-
-        //- Full access to the sha1
-        Foam::SHA1& sha1()
-        {
-            return dynamic_cast<osha1stream&>(stream()).sha1();
-        }
-
-        //- Return SHA1::Digest for the data processed until now
-        Foam::SHA1Digest digest()
+        //- Return the SHA-1 digest for the data processed until now
+        SHA1Digest digest()
         {
             return sha1().digest();
         }
-
-    // Edit
 
         //- Clear the SHA1 calculation
         void rewind()
@@ -197,6 +203,11 @@ public:
             sha1().clear();
         }
 
+
+    // Member Operators
+
+        //- Disallow default bitwise assignment
+        void operator=(const OSHA1stream&) = delete;
 };
 
 
